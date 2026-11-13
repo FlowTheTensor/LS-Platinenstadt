@@ -12,6 +12,8 @@ Erstellt für den Unterricht an der Jakob-Preh-Schule ([bsnes.de](https://www.bs
 
 ## Die Stadt
 
+Die Stadt ist nach dem **EVA-Prinzip** aufgebaut: links das Eingangstor (Eingabe), in der Mitte Rathaus oben und Wohnblock unten (Verarbeitung), rechts das Ausgangstor (Ausgabe). Die Hauptstraße (Bus) verbindet alle Gebäude.
+
 | In der Stadt | Im Rechner |
 |---|---|
 | Rathaus | Prozessor (CPU) |
@@ -21,7 +23,8 @@ Erstellt für den Unterricht an der Jakob-Preh-Schule ([bsnes.de](https://www.bs
 | Wohnblock mit Hausnummern | Arbeitsspeicher (RAM) mit Adressen 0 … 15 |
 | Hauptstraße mit drei Spuren | Bus: Adressbus, Datenbus, Steuerbus |
 | Lieferwagen | ein Transport über den Bus |
-| Stadttor mit Sensor und Monitor | Ein- und Ausgabe |
+| Eingangstor mit Sensor (links) | Eingabe |
+| Ausgangstor mit Monitor (rechts) | Ausgabe |
 | Rathausuhr | Takt |
 
 ## Die Mini-CPU
@@ -94,16 +97,17 @@ In der Harvard-Stadt fahren zwei Lieferwagen: Während der eine eine Zahl aus de
 
 ### Stufe 6: CPU und Grafikkarte
 
-Das Rathaus hat 4 Rechenmeister mit 4 GHz, die Fabrikhalle der GPU 64 einfache Arbeiter mit 1,5 GHz. Pro Takt erledigt jeder Kern eine Teilaufgabe.
+Das Rathaus hat 4 Rechenmeister mit 4 GHz, die Fabrikhalle der GPU 64 einfache Arbeiter mit 1,5 GHz. Pro Takt erledigt jeder Kern eine Teilaufgabe. Beide laufen auf einer **gemeinsamen Uhr**: Ein Schritt sind 0,25 ns (= 1 CPU-Takt). Die GPU schafft in derselben Zeit nur 0,375 Takte – deshalb sieht man im Rennen direkt, wer zuerst fertig ist.
 
 | Aufgabe | CPU | GPU | schneller |
 |---|---|---|---|
 | Bild aufhellen (64 Pixel, unabhängig) | 16 Takte = 4 ns | 1 Takt ≈ 0,67 ns | GPU |
 | 64 Sensorwerte kalibrieren (unabhängig) | 16 Takte = 4 ns | 1 Takt ≈ 0,67 ns | GPU |
+| Nur 4 Messwerte kalibrieren (unabhängig, aber wenig Arbeit) | 1 Takt = 0,25 ns | 1 Takt ≈ 0,67 ns | CPU |
 | Laufende Summe (16 Werte, abhängig) | 16 Takte = 4 ns | 16 Takte ≈ 10,67 ns | CPU |
 | Regelung (16 Schritte, abhängig) | 16 Takte = 4 ns | 16 Takte ≈ 10,67 ns | CPU |
 
-Merksatz: **Zeit = Takte : Taktfrequenz.** Viele Kerne helfen nur, wenn sich die Arbeit in unabhängige Teile zerlegen lässt.
+Merksatz: **Zeit = Takte : Taktfrequenz.** Viele Kerne helfen nur, wenn sich die Arbeit in unabhängige Teile zerlegen lässt **und** genug Arbeit für alle da ist. (In echt kommt bei der GPU noch der Transport der Daten über den Bus zur Grafikkarte und zurück dazu.)
 
 ## Erkunden und Freigabeprüfung
 
@@ -124,7 +128,7 @@ Beispiele für Prüfungsfragen:
 | 3 | Was passiert, wenn der Befehlszähler auf eine Zahl zeigt? Woran erkennt die CPU Befehle? Adresse in einem „Zahl-Befehl“ |
 | 4 | Ausgabe einer Summen-Schleife · Anzahl der Schleifendurchläufe · Anzahl der Ausgaben beim Countdown |
 | 5 | Unterschiede und Vorteile beider Architekturen · Takte eines Programms bei von Neumann bzw. Harvard |
-| 6 | Takte bei n Pixeln und k Kernen · abhängige Aufgaben auf der GPU · Zeitvergleich mit Taktfrequenz |
+| 6 | Takte bei n Pixeln und k Kernen · abhängige Aufgaben auf der GPU · kleine Aufgaben · Zeitvergleich mit Taktfrequenz |
 
 ## Bedienung
 

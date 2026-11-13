@@ -99,8 +99,8 @@ const FUEHRUNG = [
   },
   {
     id: "ea",
-    titel: "Stadttor = Ein- und Ausgabe",
-    text: "Hier kommt die Außenwelt herein: Der Sensor liefert Messwerte (Eingabe), der Monitor zeigt Ergebnisse (Ausgabe). Beim Laborserver wären das z. B. Temperatursensor und Bildschirm.",
+    titel: "Stadttore = Ein- und Ausgabe",
+    text: "Die Stadt ist nach dem EVA-Prinzip gebaut: Links durch das Eingangstor kommen Daten von außen herein (Eingabe, z. B. ein Temperatursensor). In der Mitte wird verarbeitet (Rathaus und Wohnblock). Rechts durch das Ausgangstor gehen die Ergebnisse hinaus (Ausgabe, z. B. ein Bildschirm). Auch Steckkarten wie eine Grafikkarte sind von hier aus gesehen „Außenwelt“.",
   },
   {
     id: "prinzip",
@@ -116,6 +116,7 @@ const GPU_DATEN = { kerne: 64, ghz: 1.5 };
 const GPU_AUFGABEN = [
   { name: "Bild aufhellen (64 Pixel)", n: 64, abhaengig: false, text: "Jedes Pixel wird um 20 % heller. Kein Pixel braucht das Ergebnis eines anderen – alle können gleichzeitig bearbeitet werden." },
   { name: "64 Sensorwerte kalibrieren", n: 64, abhaengig: false, text: "Jeder Messwert wird mit einem Faktor korrigiert. Die Werte sind voneinander unabhängig." },
+  { name: "Nur 4 Messwerte kalibrieren", n: 4, abhaengig: false, text: "Wie oben, aber es sind nur 4 Werte. Unabhängig sind sie trotzdem – doch 60 der 64 GPU-Arbeiter haben nichts zu tun. Beide brauchen 1 Takt, und der Takt der CPU ist kürzer." },
   { name: "Laufende Summe (16 Werte)", n: 16, abhaengig: true, text: "Jeder Schritt braucht das Ergebnis des vorigen (Summe bis hier + nächster Wert). Das geht nur nacheinander." },
   { name: "Regelung (16 Schritte)", n: 16, abhaengig: true, text: "Ein Regler berechnet aus dem letzten Ergebnis die nächste Stellgröße. Jeder Schritt hängt vom vorigen ab." },
 ];
@@ -174,7 +175,7 @@ const STUFEN = [
     untertitel: "Stufe 6 · Wenige schnelle Rechenmeister oder viele einfache Arbeiter?",
     ansicht: "gpu",
     beispiele: [],
-    auftrag: "Das Rathaus (CPU) hat 4 schnelle Rechenmeister, die Fabrikhalle der Grafikkarte (GPU) 64 einfache Arbeiter. Wer ist schneller? Probiere unabhängige und abhängige Aufgaben aus.",
+    auftrag: "Das Rathaus (CPU) hat 4 schnelle Rechenmeister, die Fabrikhalle der Grafikkarte (GPU) 64 einfache Arbeiter. Wer ist schneller? Probiere unabhängige und abhängige, große und kleine Aufgaben aus – bei welchen gewinnt die CPU?",
   },
 ];
 
@@ -390,7 +391,15 @@ function neuePruefung(stufe) {
     );
   }
   // CPU · GPU
-  const art = waehle(["cpuTakte", "gpuTakte", "abhaengig", "geeignet", "schneller"]);
+  const art = waehle(["cpuTakte", "gpuTakte", "abhaengig", "geeignet", "schneller", "klein"]);
+  if (art === "klein") {
+    const n = waehle([2, 3, 4]);
+    return mc(
+      `Nur ${n} Messwerte sollen kalibriert werden (voneinander unabhängig). CPU: 4 Kerne, 4 GHz. GPU: 64 Kerne, 1,5 GHz. Wer ist schneller fertig?`,
+      ["die CPU – beide brauchen 1 Takt, aber der CPU-Takt ist kürzer", "die GPU, weil sie mehr Kerne hat", "beide gleich schnell, weil beide 1 Takt brauchen", "die GPU, weil die Aufgaben unabhängig sind"],
+      `Beide schaffen ${n} Werte in 1 Takt. CPU: 1 : 4 GHz = 0,25 ns, GPU: 1 : 1,5 GHz ≈ 0,67 ns. Viele Kerne nützen nur, wenn es genug Arbeit für alle gibt – in echt müssen die Daten außerdem erst zur Grafikkarte und zurück.`
+    );
+  }
   if (art === "cpuTakte" || art === "gpuTakte") {
     const n = waehle([64, 128, 256, 512, 1024]);
     const k = art === "cpuTakte" ? waehle([4, 8, 16]) : waehle([64, 128, 256]);

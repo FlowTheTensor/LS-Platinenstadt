@@ -106,7 +106,7 @@ let animT0 = 0;
 let fuehrungIdx = 0;
 
 let gpuAufgabe = 0;
-let gpuTakt = 0;
+let gpuUhr = 0;
 
 let aufgabe = null;
 let serie = 0;
@@ -193,7 +193,7 @@ function logik() {
     return;
   }
   if (STUFEN[stufe].ansicht === "gpu") {
-    if (millis() - animT0 > 650 * TEMPO[tempo]) {
+    if (millis() - animT0 > 320 * TEMPO[tempo]) {
       gpuSchritt();
       if (gpuFertig()) {
         laufAuto = false;
@@ -243,7 +243,7 @@ function zuruecksetzen() {
   rueckmeldung = null;
   aufloesung = false;
   aufgabe = null;
-  gpuTakt = 0;
+  gpuUhr = 0;
   if (modus === "pruefung") {
     naechsteAufgabe();
   } else {
@@ -292,7 +292,7 @@ function naechsterSchritt() {
 function schrittKnopf() {
   if (STUFEN[stufe].ansicht === "gpu") {
     if (gpuFertig()) {
-      gpuTakt = 0;
+      gpuUhr = 0;
     }
     gpuSchritt();
     return;
@@ -311,7 +311,7 @@ function schrittKnopf() {
 function autoUmschalten() {
   if (STUFEN[stufe].ansicht === "gpu") {
     if (gpuFertig()) {
-      gpuTakt = 0;
+      gpuUhr = 0;
     }
     laufAuto = !laufAuto;
     animT0 = millis() - 10000;
@@ -326,7 +326,7 @@ function autoUmschalten() {
 
 function neustart() {
   if (STUFEN[stufe].ansicht === "gpu") {
-    gpuTakt = 0;
+    gpuUhr = 0;
     laufAuto = false;
     return;
   }
@@ -346,10 +346,26 @@ function archWechseln(a) {
 // =============================================================================
 // GPU-Vergleich
 // =============================================================================
-function gpuFortschritt(daten, takt) {
+// Gemeinsame Uhr für beide: gpuUhr zählt Zeitschritte von je 0,25 ns
+// (= 1 Takt der CPU). Die langsamer getaktete GPU schafft in derselben
+// Zeit weniger Takte – so sieht man, wer wirklich zuerst fertig ist.
+function gpuZeitschritt() {
+  return 1 / CPU_DATEN.ghz;
+}
+
+function gpuZeit() {
+  return gpuUhr * gpuZeitschritt();
+}
+
+// fertige Takte bis jetzt (höchstens so viele, wie die Aufgabe braucht)
+function takteBisher(daten) {
+  return Math.min(gpuTakteGesamt(daten), Math.floor(gpuZeit() * daten.ghz + 1e-9));
+}
+
+function gpuFortschritt(daten) {
   const a = GPU_AUFGABEN[gpuAufgabe];
   const proTakt = a.abhaengig ? 1 : daten.kerne;
-  return Math.min(a.n, takt * proTakt);
+  return Math.min(a.n, takteBisher(daten) * proTakt);
 }
 
 function gpuTakteGesamt(daten) {
@@ -357,21 +373,34 @@ function gpuTakteGesamt(daten) {
   return a.abhaengig ? a.n : Math.ceil(a.n / daten.kerne);
 }
 
+// Bearbeitet Kern i im aktuellen Takt eine Teilaufgabe?
+function kernArbeitet(daten, i) {
+  const a = GPU_AUFGABEN[gpuAufgabe];
+  const fertig = takteBisher(daten);
+  if (gpuUhr <= 0 || fertig >= gpuTakteGesamt(daten)) {
+    return false;
+  }
+  if (a.abhaengig) {
+    return i === 0;
+  }
+  return fertig * daten.kerne + i < a.n; // Teilaufgabe im laufenden Takt
+}
+
 function gpuFertig() {
-  return gpuTakt >= Math.max(gpuTakteGesamt(CPU_DATEN), gpuTakteGesamt(GPU_DATEN));
+  return takteBisher(CPU_DATEN) >= gpuTakteGesamt(CPU_DATEN) && takteBisher(GPU_DATEN) >= gpuTakteGesamt(GPU_DATEN);
 }
 
 function gpuSchritt() {
   if (gpuFertig()) {
     return;
   }
-  gpuTakt++;
+  gpuUhr++;
   animT0 = millis();
 }
 
 function gpuAufgabeWechseln(i) {
   gpuAufgabe = i;
-  gpuTakt = 0;
+  gpuUhr = 0;
   laufAuto = false;
 }
 
@@ -660,7 +689,7 @@ function zeichneStatus() {
   } else if (stufe === 0) {
     txt = "Klick auf ein Gebäude oder „Weiter“ für die nächste Station der Stadtführung";
   } else if (STUFEN[stufe].ansicht === "gpu") {
-    txt = "→ ein Takt · Leertaste automatisch · R Neustart · Aufgabe wechseln: unabhängige und abhängige Aufgaben vergleichen";
+    txt = "→ 0,25 ns weiter · Leertaste automatisch · R Neustart · beide laufen auf derselben Uhr – wer ist zuerst fertig?";
   } else {
     txt = "→ nächster Schritt · Leertaste automatisch · R Neustart";
   }
@@ -670,14 +699,24 @@ function zeichneStatus() {
 // =============================================================================
 // Die Stadt (von Neumann oder Harvard)
 // =============================================================================
-const RATHAUS = { x: 54, y: 150, w: 300, h: 310 };
-const STEUERWERK = { x: 70, y: 200, w: 268, h: 120 };
-const RECHENWERK = { x: 70, y: 330, w: 268, h: 118 };
-const RAM_GEB = { x: 610, y: 136, w: 286, h: 336 };
-const PROG_GEB = { x: 610, y: 124, w: 286, h: 168 };
-const DATEN_GEB = { x: 610, y: 324, w: 286, h: 168 };
-const TOR = { x: 400, y: 486, w: 190, h: 120 };
-const BUS_Y = { adresse: 252, daten: 284, steuer: 314 };
+// Aufbau nach dem EVA-Prinzip:
+//   links  Eingangstor (Eingabe)
+//   Mitte  Rathaus (CPU) oben, Wohnblock (Speicher) unten – Verarbeitung
+//   rechts Ausgangstor (Ausgabe)
+// Die Hauptstraße (Bus) verbindet alle Gebäude.
+const RATHAUS = { x: 194, y: 170, w: 560, h: 162 };
+const STEUERWERK = { x: 202, y: 192, w: 268, h: 128 };
+const RECHENWERK = { x: 480, y: 192, w: 266, h: 128 };
+const STRASSE = { x: 180, y: 350, w: 588, h: 96 };
+const BUS_Y = { adresse: 370, daten: 398, steuer: 426 };
+const X_CPU = 330; // Ausfahrt des Rathauses (Harvard: Befehlsbus)
+const X_DATEN = 620; // Einfahrt Wohnblock (Harvard: Datenbus)
+const RAM_GEB = { x: 234, y: 470, w: 480, h: 138 };
+const PROG_GEB = { x: 194, y: 470, w: 272, h: 138 };
+const DATEN_GEB = { x: 484, y: 470, w: 272, h: 138 };
+const EIN_TOR = { x: 56, y: 316, w: 124, h: 164 };
+const AUS_TOR = { x: 768, y: 316, w: 124, h: 164 };
+const HARVARD_DATENSTRASSE = { y: 372, h: 52 };
 
 function gebaeudeUnterMaus(m) {
   const ziele = [
@@ -685,8 +724,9 @@ function gebaeudeUnterMaus(m) {
     ["rechenwerk", RECHENWERK],
     ["rathaus", RATHAUS],
     ["ram", RAM_GEB],
-    ["bus", { x: 354, y: 236, w: 256, h: 92 }],
-    ["ea", TOR],
+    ["bus", STRASSE],
+    ["ea", EIN_TOR],
+    ["ea", AUS_TOR],
   ];
   for (const [id, r] of ziele) {
     if (inRechteck(m, r)) {
@@ -717,22 +757,21 @@ function zeichneStadt() {
   const s = aktSchritt();
   const fokus = stufe === 0 && modus === "ueben" ? FUEHRUNG[fuehrungIdx].id : null;
 
+  zeichneEvaKopf(fokus === "prinzip");
   if (harvard) {
-    zeichneStrasse(354, PROG_GEB.x, 196, "Befehlsbus", FARBE.blau, fokus === "bus");
-    zeichneStrasse(354, DATEN_GEB.x, 404, "Datenbus", FARBE.senf, fokus === "bus");
-    zeichneTorStrasse(500, 404);
+    zeichneHarvardStrassen();
   } else {
     zeichneHauptstrasse(fokus === "bus");
-    zeichneTorStrasse(500, 284);
   }
   zeichneRathaus(s, fokus);
   if (harvard) {
     zeichneSpeicherGebaeude(PROG_GEB, "Programm-Bibliothek", "Befehlsspeicher (Flash)", s, "prog", ROLLE.befehl, 2);
     zeichneSpeicherGebaeude(DATEN_GEB, "Daten-Wohnblock", "Datenspeicher (RAM)", s, "daten", ROLLE.daten, 2);
   } else {
-    zeichneSpeicherGebaeude(RAM_GEB, "Wohnblock · RAM", "Befehle UND Daten", s, "ram", FARBE.violett, 4, fokus === "ram");
+    zeichneSpeicherGebaeude(RAM_GEB, "Wohnblock · Arbeitsspeicher (RAM)", "Befehle UND Daten", s, "ram", FARBE.violett, 2, fokus === "ram");
   }
-  zeichneTor(s, fokus === "ea");
+  zeichneTor(EIN_TOR, "ein", s, fokus === "ea");
+  zeichneTor(AUS_TOR, "aus", s, fokus === "ea");
   if (s && s.fahrtenListe.length) {
     for (const f of s.fahrtenListe) {
       zeichneLieferwagen(f, harvard);
@@ -743,10 +782,54 @@ function zeichneStadt() {
   }
 }
 
-function zeichneHauptstrasse(fokus) {
+// Kopfzeile auf der Platine: Eingabe → Verarbeitung → Ausgabe
+function zeichneEvaKopf(fokus) {
+  const y = 127;
+  const eintraege = [
+    ["E · Eingabe", EIN_TOR.x + EIN_TOR.w / 2],
+    ["V · Verarbeitung", RATHAUS.x + RATHAUS.w / 2],
+    ["A · Ausgabe", AUS_TOR.x + AUS_TOR.w / 2],
+  ];
+  textFont(TITEL);
+  textStyle(BOLD);
+  textSize(12);
+  const raender = [];
+  for (const [name, cx] of eintraege) {
+    const w = textWidth(name) + 24;
+    noStroke();
+    fill(...(fokus ? [255, 236, 170] : [255, 255, 255]));
+    rect(cx - w / 2, y, w, 18, 9);
+    fill(...FARBE.platine);
+    textAlign(CENTER, CENTER);
+    text(name, cx, y + 9);
+    raender.push([cx - w / 2, cx + w / 2]);
+  }
+  textStyle(NORMAL);
+  stroke(255, 255, 255, 200);
+  strokeWeight(2);
+  for (let i = 0; i < raender.length - 1; i++) {
+    const x1 = raender[i][1] + 8;
+    const x2 = raender[i + 1][0] - 8;
+    line(x1, y + 9, x2, y + 9);
+    line(x2, y + 9, x2 - 6, y + 4);
+    line(x2, y + 9, x2 - 6, y + 14);
+  }
+  noStroke();
+}
+
+function zufahrt(x, y1, y2) {
   noStroke();
   fill(...FARBE.strasse);
-  rect(354, 236, RAM_GEB.x - 354, 92);
+  rect(x - 18, y1, 36, y2 - y1);
+}
+
+function zeichneHauptstrasse(fokus) {
+  const st = STRASSE;
+  zufahrt(X_CPU, RATHAUS.y + RATHAUS.h, st.y);
+  zufahrt(X_DATEN, st.y + st.h, RAM_GEB.y);
+  noStroke();
+  fill(...FARBE.strasse);
+  rect(st.x, st.y, st.w, st.h);
   const spuren = [
     ["Adressbus", BUS_Y.adresse, FARBE.blau],
     ["Datenbus", BUS_Y.daten, FARBE.gruen],
@@ -756,54 +839,77 @@ function zeichneHauptstrasse(fokus) {
     stroke(...farbe);
     strokeWeight(3);
     drawingContext.setLineDash([12, 8]);
-    line(360, y, RAM_GEB.x - 6, y);
+    line(st.x + 6, y, st.x + st.w - 6, y);
     drawingContext.setLineDash([]);
     noStroke();
     fill(...hell(farbe, 0.55));
     textFont(SCHRIFT);
     textSize(10);
     textAlign(LEFT, BOTTOM);
-    text(name, 364, y - 3);
+    text(name, st.x + 8, y - 3);
   }
-  noStroke();
-  fill(255);
-  textFont(TITEL);
-  textStyle(BOLD);
-  textSize(13);
-  textAlign(CENTER, BOTTOM);
-  text("Hauptstraße = Bus", (354 + RAM_GEB.x) / 2, 232);
-  textStyle(NORMAL);
-  if (fokus) {
-    noFill();
-    stroke(255, 220, 90);
-    strokeWeight(3);
-    rect(352, 234, RAM_GEB.x - 350, 96, 4);
-  }
-}
-
-function zeichneStrasse(x1, x2, y, name, farbe) {
-  noStroke();
-  fill(...FARBE.strasse);
-  rect(x1, y - 26, x2 - x1, 52);
-  stroke(...farbe);
-  strokeWeight(3);
-  drawingContext.setLineDash([12, 8]);
-  line(x1 + 6, y, x2 - 6, y);
-  drawingContext.setLineDash([]);
   noStroke();
   fill(255);
   textFont(TITEL);
   textStyle(BOLD);
   textSize(12);
-  textAlign(CENTER, BOTTOM);
-  text(name, (x1 + x2) / 2, y - 28);
+  textAlign(CENTER, CENTER);
+  text("Hauptstraße = Bus", 430, st.y + st.h + 12);
   textStyle(NORMAL);
+  if (fokus) {
+    noFill();
+    stroke(255, 220, 90);
+    strokeWeight(3);
+    rect(st.x - 2, st.y - 2, st.w + 4, st.h + 4, 4);
+  }
 }
 
-function zeichneTorStrasse(x, yStart) {
+function zeichneHarvardStrassen() {
+  const ds = HARVARD_DATENSTRASSE;
+  const unten = RATHAUS.y + RATHAUS.h;
+  // Datenbus: Rathaus – Daten-Wohnblock und zu den Stadttoren
+  zufahrt(X_DATEN, unten, ds.y);
+  zufahrt(X_DATEN, ds.y + ds.h, DATEN_GEB.y);
   noStroke();
   fill(...FARBE.strasse);
-  rect(x - 16, yStart, 32, TOR.y - yStart + 4);
+  rect(STRASSE.x, ds.y, STRASSE.w, ds.h);
+  stroke(...FARBE.senf);
+  strokeWeight(3);
+  drawingContext.setLineDash([12, 8]);
+  line(STRASSE.x + 6, BUS_Y.daten, STRASSE.x + STRASSE.w - 6, BUS_Y.daten);
+  line(X_DATEN, unten + 4, X_DATEN, ds.y);
+  line(X_DATEN, ds.y + ds.h, X_DATEN, DATEN_GEB.y - 2);
+  drawingContext.setLineDash([]);
+  // Befehlsbus: eigene Straße zur Programm-Bibliothek, als Brücke über den Datenbus
+  noStroke();
+  fill(0, 0, 0, 60);
+  rect(X_CPU - 16, ds.y - 4, 40, ds.h + 12);
+  fill(...FARBE.strasse);
+  rect(X_CPU - 20, unten, 40, PROG_GEB.y - unten);
+  stroke(...FARBE.blau);
+  strokeWeight(3);
+  drawingContext.setLineDash([12, 8]);
+  line(X_CPU, unten + 4, X_CPU, PROG_GEB.y - 2);
+  drawingContext.setLineDash([]);
+  stroke(220, 220, 214);
+  strokeWeight(2.5);
+  line(X_CPU - 21, ds.y - 8, X_CPU - 21, ds.y + ds.h + 8);
+  line(X_CPU + 21, ds.y - 8, X_CPU + 21, ds.y + ds.h + 8);
+  noStroke();
+  fill(255);
+  textFont(TITEL);
+  textStyle(BOLD);
+  textSize(12);
+  textAlign(LEFT, BOTTOM);
+  text("Datenbus", X_DATEN + 30, ds.y - 4);
+  textAlign(RIGHT, CENTER);
+  text("Befehlsbus", X_CPU - 28, 447);
+  textStyle(NORMAL);
+  textFont(SCHRIFT);
+  textSize(10);
+  fill(...hell(FARBE.strasse, 0.7));
+  textAlign(RIGHT, CENTER);
+  text("(Brücke)", X_CPU - 28, 461);
 }
 
 function zeichneRathaus(s, fokus) {
@@ -819,15 +925,12 @@ function zeichneRathaus(s, fokus) {
   textStyle(BOLD);
   textSize(14);
   textAlign(CENTER, CENTER);
-  text("RATHAUS · CPU", r.x + r.w / 2, r.y + 2);
+  text("RATHAUS · CPU", r.x + r.w / 2, r.y - 8);
   textStyle(NORMAL);
   // Uhr (Takt)
-  const s0 = s ? s.takte : 0;
-  fill(...FARBE.text);
   textFont(MONO);
   textSize(11);
-  textAlign(CENTER, CENTER);
-  text(`Takt ${s0}`, r.x + r.w / 2, r.y + 30);
+  text(`Takt ${s ? s.takte : 0}`, r.x + r.w / 2, r.y + 6);
 
   const phase = s ? s.phase : "start";
   const b = s && s.ir !== null ? dekodiere(s.ir) : null;
@@ -836,25 +939,25 @@ function zeichneRathaus(s, fokus) {
 
   // Steuerwerk
   raum(STEUERWERK, "Steuerwerk", steuerAktiv, fokus === "steuerwerk");
-  person(STEUERWERK.x + 34, STEUERWERK.y + 84, [122, 74, 150], true, steuerAktiv);
-  tafel(STEUERWERK.x + 72, STEUERWERK.y + 26, 88, "Befehlszähler", s ? String(s.pc) : "0", FARBE.blau, fokus === "register");
-  tafel(STEUERWERK.x + 168, STEUERWERK.y + 26, 92, "Befehlsregister", s && s.ir !== null ? hex2(s.ir) : "–", FARBE.blau, fokus === "register", b ? b.text : "");
+  person(STEUERWERK.x + 34, STEUERWERK.y + 88, [122, 74, 150], true, steuerAktiv);
+  tafel(STEUERWERK.x + 72, STEUERWERK.y + 28, 88, "Befehlszähler", s ? String(s.pc) : "0", FARBE.blau, fokus === "register");
+  tafel(STEUERWERK.x + 168, STEUERWERK.y + 28, 92, "Befehlsregister", s && s.ir !== null ? hex2(s.ir) : "–", FARBE.blau, fokus === "register", b ? b.text : "");
   // Rechenwerk
   raum(RECHENWERK, "Rechenwerk (ALU)", rechenAktiv, fokus === "rechenwerk");
-  person(RECHENWERK.x + 34, RECHENWERK.y + 84, [184, 122, 28], false, rechenAktiv);
-  tafel(RECHENWERK.x + 72, RECHENWERK.y + 26, 110, "Akku", s ? String(s.akku) : "0", FARBE.gruen, fokus === "register", s ? bin8(s.akku) : "");
+  person(RECHENWERK.x + 34, RECHENWERK.y + 88, [184, 122, 28], false, rechenAktiv);
+  tafel(RECHENWERK.x + 72, RECHENWERK.y + 28, 110, "Akku", s ? String(s.akku) : "0", FARBE.gruen, fokus === "register", s ? bin8(s.akku) : "");
   // ALU-Trichter
   fill(...(rechenAktiv ? hell(FARBE.gruen, 0.4) : [210, 206, 196]));
   stroke(...FARBE.grau);
   strokeWeight(1);
-  quad(RECHENWERK.x + 196, RECHENWERK.y + 34, RECHENWERK.x + 256, RECHENWERK.y + 34, RECHENWERK.x + 238, RECHENWERK.y + 92, RECHENWERK.x + 214, RECHENWERK.y + 92);
+  quad(RECHENWERK.x + 196, RECHENWERK.y + 36, RECHENWERK.x + 256, RECHENWERK.y + 36, RECHENWERK.x + 238, RECHENWERK.y + 94, RECHENWERK.x + 214, RECHENWERK.y + 94);
   noStroke();
   fill(...FARBE.text);
   textFont(MONO);
   textStyle(BOLD);
   textSize(13);
   textAlign(CENTER, CENTER);
-  text(b && rechenAktiv && (b.name === "ADD" || b.name === "SUB") ? (b.name === "ADD" ? "+" : "−") : "ALU", RECHENWERK.x + 226, RECHENWERK.y + 58);
+  text(b && rechenAktiv && (b.name === "ADD" || b.name === "SUB") ? (b.name === "ADD" ? "+" : "−") : "ALU", RECHENWERK.x + 226, RECHENWERK.y + 60);
   textStyle(NORMAL);
   if (fokus === "rathaus") {
     noFill();
@@ -905,6 +1008,7 @@ function person(x, y, farbe, kette, aktiv) {
     circle(x - 5, y - 43 + wippen, 8);
     circle(x + 5, y - 43 + wippen, 8);
   }
+  noStroke();
   if (aktiv) {
     noStroke();
     fill(255, 200, 60);
@@ -942,6 +1046,7 @@ function tafel(x, y, w, titel, wert, farbe, fokus, unten) {
 
 // Speichergebäude mit nummerierten Fenstern (Wohnungen)
 function zeichneSpeicherGebaeude(g, name, untertitel, s, art, farbe, reihen, fokus) {
+  const gross = g.w > 400;
   noStroke();
   fill(...farbe);
   rect(g.x, g.y, g.w, 30, 6, 6, 0, 0);
@@ -959,11 +1064,11 @@ function zeichneSpeicherGebaeude(g, name, untertitel, s, art, farbe, reihen, fok
   rect(g.x, g.y + 30, g.w, g.h - 30, 0, 0, 6, 6);
   const spalten = 16 / reihen;
   const fw = (g.w - 16) / spalten;
-  const fh = (g.h - 46) / reihen;
+  const fh = (g.h - 40) / reihen;
   const speicher = s ? (art === "prog" ? s.prog : art === "daten" ? s.daten : s.mem) : null;
   for (let i = 0; i < 16; i++) {
     const fx = g.x + 8 + (i % spalten) * fw;
-    const fy = g.y + 38 + Math.floor(i / spalten) * fh;
+    const fy = g.y + 35 + Math.floor(i / spalten) * fh;
     let licht = [215, 222, 232];
     if (s && s.lesen && s.lesen.adr === i && s.lesen.speicher === art) {
       licht = hell(ROLLE[s.lesen.art], 0.35);
@@ -982,14 +1087,14 @@ function zeichneSpeicherGebaeude(g, name, untertitel, s, art, farbe, reihen, fok
     fill(...FARBE.text);
     textFont(MONO);
     textStyle(BOLD);
-    textSize(reihen === 4 ? 13 : 11);
+    textSize(gross ? 13 : 11);
     textAlign(CENTER, TOP);
     text(String(i), fx + fw / 2, fy + 7);
     textStyle(NORMAL);
     if (speicher) {
       fill(...FARBE.grau);
-      textSize(reihen === 4 ? 11 : 9);
-      text(hex2(speicher[i]).slice(2), fx + fw / 2, fy + (reihen === 4 ? 30 : 24));
+      textSize(gross ? 11 : 9.5);
+      text(hex2(speicher[i]).slice(2), fx + fw / 2, fy + (gross ? 26 : 24));
     }
     // Befehlszähler-Pfeil
     if (s && art !== "daten" && s.pc === i && s.phase !== "halt" && s.phase !== "fehler") {
@@ -1005,67 +1110,105 @@ function zeichneSpeicherGebaeude(g, name, untertitel, s, art, farbe, reihen, fok
   }
 }
 
-function zeichneTor(s, fokus) {
-  const t = TOR;
+// Stadttor: "ein" = Eingangstor mit Sensor, "aus" = Ausgangstor mit Monitor
+function zeichneTor(t, art, s, fokus) {
   noStroke();
   fill(120, 110, 96);
-  rect(t.x, t.y, t.w, t.h, 6);
+  // Zinnen
+  const zb = (t.w - 8) / 5;
+  for (let i = 0; i < 5; i++) {
+    rect(t.x + 4 + i * zb + 2, t.y - 10, zb - 6, 12, 2, 2, 0, 0);
+  }
+  rect(t.x, t.y, t.w, t.h, 4);
   fill(...FARBE.flaeche2);
-  rect(t.x + 6, t.y + 22, t.w - 12, t.h - 28, 4);
+  rect(t.x + 6, t.y + 24, t.w - 12, t.h - 30, 4);
   fill(255);
   textFont(TITEL);
   textStyle(BOLD);
   textSize(12);
   textAlign(CENTER, CENTER);
-  text("STADTTOR · Ein-/Ausgabe", t.x + t.w / 2, t.y + 11);
+  text(art === "ein" ? "Eingangstor" : "Ausgangstor", t.x + t.w / 2, t.y + 12);
   textStyle(NORMAL);
-  // Sensor (links)
-  const ein = s ? s.eingaben : aktBeispiel().eingaben;
-  fill(...FARBE.text);
-  rect(t.x + 14, t.y + 32, 64, 34, 4);
-  fill(120, 230, 140);
-  textFont(MONO);
-  textSize(12);
-  textAlign(CENTER, CENTER);
-  text(ein && ein.length ? String(ein[0]) : "--", t.x + 46, t.y + 49);
-  fill(...FARBE.grau);
+  const cx = t.x + t.w / 2;
   textFont(SCHRIFT);
-  textSize(10);
-  text("Sensor", t.x + 46, t.y + 76);
-  if (ein && ein.length > 1) {
-    text(`dann: ${ein.slice(1).join(", ")}`, t.x + 46, t.y + 90);
+  if (art === "ein") {
+    const ein = s ? s.eingaben : aktBeispiel().eingaben;
+    fill(...FARBE.text);
+    rect(cx - 32, t.y + 36, 64, 34, 4);
+    fill(120, 230, 140);
+    textFont(MONO);
+    textSize(13);
+    textAlign(CENTER, CENTER);
+    text(ein && ein.length ? String(ein[0]) : "--", cx, t.y + 53);
+    fill(...FARBE.grau);
+    textFont(SCHRIFT);
+    textSize(11);
+    text("Sensor", cx, t.y + 84);
+    textSize(10);
+    fill(...FARBE.blass);
+    if (ein && ein.length > 1) {
+      text(`dann: ${ein.slice(1).join(", ")}`, cx, t.y + 102);
+    }
+    text("Messwerte kommen", cx, t.y + 124);
+    text("von außen herein", cx, t.y + 138);
+  } else {
+    const aus = s ? s.ausgabe : [];
+    fill(30, 40, 50);
+    rect(cx - 37, t.y + 32, 74, 46, 4);
+    fill(...FARBE.grau);
+    rect(cx - 7, t.y + 78, 14, 8);
+    fill(160, 210, 255);
+    textFont(MONO);
+    textSize(14);
+    textAlign(CENTER, CENTER);
+    text(aus.length ? String(aus[aus.length - 1]) : "", cx, t.y + 55);
+    fill(...FARBE.grau);
+    textFont(SCHRIFT);
+    textSize(11);
+    text("Monitor", cx, t.y + 98);
+    textSize(10);
+    fill(...FARBE.blass);
+    if (aus.length > 1) {
+      text(`bisher: ${aus.slice(-4).join(", ")}`, cx, t.y + 116);
+    }
+    text("Ergebnisse gehen", cx, t.y + 134);
+    text("nach außen", cx, t.y + 148);
   }
-  // Monitor (rechts)
-  const aus = s ? s.ausgabe : [];
-  fill(30, 40, 50);
-  rect(t.x + 104, t.y + 30, 74, 46, 4);
-  fill(...FARBE.grau);
-  rect(t.x + 134, t.y + 76, 14, 8);
-  fill(160, 210, 255);
-  textFont(MONO);
-  textSize(14);
-  text(aus.length ? String(aus[aus.length - 1]) : "", t.x + 141, t.y + 53);
-  fill(...FARBE.grau);
-  textFont(SCHRIFT);
-  textSize(10);
-  text("Monitor", t.x + 141, t.y + 96);
+  // Pfeil zur bzw. von der Außenwelt
+  stroke(255, 255, 255, 210);
+  strokeWeight(2.5);
+  const y = BUS_Y.daten;
+  const x1 = art === "ein" ? P_STADT.x + 14 : t.x + t.w + 2;
+  const x2 = art === "ein" ? t.x - 2 : P_STADT.x + P_STADT.w - 14;
+  line(x1, y, x2, y);
+  line(x2, y, x2 - 6, y - 5);
+  line(x2, y, x2 - 6, y + 5);
+  noStroke();
   if (fokus) {
     noFill();
     stroke(255, 220, 90);
     strokeWeight(4);
-    rect(t.x - 4, t.y - 4, t.w + 8, t.h + 8, 8);
+    rect(t.x - 4, t.y - 14, t.w + 8, t.h + 18, 8);
   }
 }
 
 // Weg des Lieferwagens: Punkte vom Rathaus zum Ziel
 function weg(f, harvard) {
-  const yStrasse = harvard ? (f.strasse === "befehl" ? 196 : 404) : BUS_Y.daten;
-  const start = [RATHAUS.x + RATHAUS.w, yStrasse];
-  if (f.ziel === "sensor" || f.ziel === "monitor") {
-    return [start, [500, yStrasse], [500, TOR.y - 8]];
+  const unten = RATHAUS.y + RATHAUS.h;
+  const yBus = BUS_Y.daten;
+  if (harvard && f.strasse === "befehl") {
+    return [[X_CPU, unten + 4], [X_CPU, PROG_GEB.y - 6]];
   }
-  const geb = f.ziel === "prog" ? PROG_GEB : f.ziel === "daten" ? DATEN_GEB : RAM_GEB;
-  return [start, [geb.x - 6, yStrasse]];
+  const x0 = harvard ? X_DATEN : X_CPU;
+  const start = [[x0, unten + 4], [x0, yBus]];
+  if (f.ziel === "sensor") {
+    return start.concat([[EIN_TOR.x + EIN_TOR.w + 6, yBus]]);
+  }
+  if (f.ziel === "monitor") {
+    return start.concat([[AUS_TOR.x - 6, yBus]]);
+  }
+  const geb = harvard ? DATEN_GEB : RAM_GEB;
+  return start.concat([[X_DATEN, yBus], [X_DATEN, geb.y - 6]]);
 }
 
 function punktAufWeg(pkte, t) {
@@ -1094,6 +1237,16 @@ function zeichneLieferwagen(f, harvard) {
   const hin = t < 0.5;
   const u = weich(hin ? t * 2 : (1 - t) * 2);
   const [x, y] = punktAufWeg(pkte, u);
+  // Fahrtrichtung aus einem Punkt kurz davor bzw. danach
+  const u2 = hin ? Math.min(1, u + 0.02) : Math.max(0, u - 0.02);
+  let [x2, y2] = punktAufWeg(pkte, u2);
+  let dx = x2 - x;
+  let dy = y2 - y;
+  if (Math.abs(dx) + Math.abs(dy) < 0.01) {
+    const v = punktAufWeg(pkte, hin ? Math.max(0, u - 0.02) : Math.min(1, u + 0.02));
+    dx = x - v[0];
+    dy = y - v[1];
+  }
   let schild;
   let farbe;
   if (f.art === "befehl") {
@@ -1109,13 +1262,14 @@ function zeichneLieferwagen(f, harvard) {
     farbe = FARBE.gruen;
     schild = f.ziel === "sensor" ? (hin ? "holen" : `Messwert ${f.inhalt}`) : hin ? `${f.inhalt} → Monitor` : "leer";
   }
-  const senkrecht = f.ziel === "sensor" || f.ziel === "monitor" ? Math.abs(x - 500) < 1 && y > (harvard ? 404 : BUS_Y.daten) + 2 : false;
   push();
   translate(x, y);
-  if (senkrecht) {
-    rotate(HALF_PI);
-  } else if (!hin) {
-    scale(-1, 1);
+  if (Math.abs(dx) >= Math.abs(dy)) {
+    if (dx < 0) {
+      scale(-1, 1);
+    }
+  } else {
+    rotate(dy > 0 ? HALF_PI : -HALF_PI);
   }
   noStroke();
   fill(...farbe);
@@ -1128,7 +1282,7 @@ function zeichneLieferwagen(f, harvard) {
   circle(-14, 11, 9);
   circle(14, 11, 9);
   pop();
-  // Schild über dem Wagen
+  // Schild neben dem Wagen
   textFont(MONO);
   textSize(11);
   const b = textWidth(schild) + 12;
@@ -1136,24 +1290,25 @@ function zeichneLieferwagen(f, harvard) {
   fill(255, 255, 255, 240);
   stroke(...farbe);
   strokeWeight(1.5);
-  rect(x - b / 2, y - 38, b, 18, 4);
+  rect(x - b / 2, y - 40, b, 18, 4);
   noStroke();
   fill(...farbe);
   textAlign(CENTER, CENTER);
-  text(schild, x, y - 29);
+  text(schild, x, y - 31);
 }
 
 function zeichneFokusRahmen(id) {
   // Hinweisfähnchen für die Stadtführung
   const pos = {
-    rathaus: null,
-    steuerwerk: [STEUERWERK.x + STEUERWERK.w / 2, STEUERWERK.y - 8],
-    rechenwerk: [RECHENWERK.x + RECHENWERK.w / 2, RECHENWERK.y - 8],
-    register: [STEUERWERK.x + 160, STEUERWERK.y + 18],
-    ram: [RAM_GEB.x + RAM_GEB.w / 2, RAM_GEB.y - 10],
-    bus: [480, 226],
-    ea: [TOR.x + TOR.w / 2, TOR.y - 10],
-    prinzip: [480, 160],
+    steuerwerk: [[STEUERWERK.x + STEUERWERK.w / 2, STEUERWERK.y - 2]],
+    rechenwerk: [[RECHENWERK.x + RECHENWERK.w / 2, RECHENWERK.y - 2]],
+    register: [[STEUERWERK.x + 160, STEUERWERK.y + 24]],
+    ram: [[RAM_GEB.x + RAM_GEB.w / 2, RAM_GEB.y - 2]],
+    bus: [[RATHAUS.x + RATHAUS.w / 2, STRASSE.y - 2]],
+    ea: [
+      [EIN_TOR.x + EIN_TOR.w / 2, EIN_TOR.y - 14],
+      [AUS_TOR.x + AUS_TOR.w / 2, AUS_TOR.y - 14],
+    ],
   }[id];
   if (!pos) {
     return;
@@ -1161,7 +1316,9 @@ function zeichneFokusRahmen(id) {
   const huepf = Math.sin(millis() / 200) * 4;
   noStroke();
   fill(255, 210, 60);
-  triangle(pos[0] - 9, pos[1] - 18 + huepf, pos[0] + 9, pos[1] - 18 + huepf, pos[0], pos[1] - 4 + huepf);
+  for (const pt of pos) {
+    triangle(pt[0] - 9, pt[1] - 18 + huepf, pt[0] + 9, pt[1] - 18 + huepf, pt[0], pt[1] - 4 + huepf);
+  }
 }
 
 // =============================================================================
@@ -1561,7 +1718,6 @@ function zeichneGpuStadt() {
   fill(...FARBE.platine);
   rect(p.x + 10, p.y + KOPF_H + 6, p.w - 20, p.h - KOPF_H - 16, 8);
   const a = GPU_AUFGABEN[gpuAufgabe];
-  const taktAktiv = millis() - animT0 < 500;
   // --- CPU-Rathaus ---
   const cx = p.x + 40;
   const cy = p.y + 90;
@@ -1580,11 +1736,10 @@ function zeichneGpuStadt() {
   textFont(SCHRIFT);
   textSize(12);
   text(`${CPU_DATEN.kerne} Rechenmeister (Kerne) · ${CPU_DATEN.ghz.toFixed(1).replace(".", ",")} GHz`, cx + 165, cy + 32);
-  const cpuFertig = gpuFortschritt(CPU_DATEN, gpuTakt) >= a.n;
   for (let i = 0; i < CPU_DATEN.kerne; i++) {
     const kx = cx + 30 + (i % 2) * 150;
     const ky = cy + 70 + Math.floor(i / 2) * 160;
-    const arbeitet = taktAktiv && !cpuFertig && (!a.abhaengig || i === 0) && gpuTakt > 0;
+    const arbeitet = kernArbeitet(CPU_DATEN, i);
     fill(...(arbeitet ? [255, 240, 200] : [255, 255, 255]));
     stroke(...FARBE.linie);
     strokeWeight(1);
@@ -1596,10 +1751,10 @@ function zeichneGpuStadt() {
     textSize(11);
     textAlign(CENTER, TOP);
     text(`Kern ${i + 1}`, kx + 65, ky + 108);
-    if (a.abhaengig && i > 0) {
+    if ((a.abhaengig && i > 0) || (!a.abhaengig && i >= a.n)) {
       fill(...FARBE.blass);
       textSize(10);
-      text("wartet …", kx + 65, ky + 122);
+      text(a.abhaengig ? "wartet …" : "nichts zu tun", kx + 65, ky + 122);
     }
   }
   // --- GPU-Fabrik ---
@@ -1625,11 +1780,10 @@ function zeichneGpuStadt() {
   textFont(SCHRIFT);
   textSize(12);
   text(`${GPU_DATEN.kerne} einfache Arbeiter (Kerne) · ${GPU_DATEN.ghz.toFixed(1).replace(".", ",")} GHz`, gx + 220, gy + 32);
-  const gpuFertigJetzt = gpuFortschritt(GPU_DATEN, gpuTakt) >= a.n;
   for (let i = 0; i < GPU_DATEN.kerne; i++) {
     const wx = gx + 34 + (i % 8) * 52;
     const wy = gy + 76 + Math.floor(i / 8) * 40;
-    const arbeitet = taktAktiv && !gpuFertigJetzt && gpuTakt > 0 && (a.abhaengig ? i === 0 : true);
+    const arbeitet = kernArbeitet(GPU_DATEN, i);
     noStroke();
     fill(...(arbeitet ? [44, 92, 150] : [150, 160, 172]));
     rect(wx - 8, wy - 2, 16, 16, 4);
@@ -1659,7 +1813,7 @@ function zeichneGpuRaster() {
   seiten.forEach(([name, daten, farbe], k) => {
     const x0 = p.x + 20 + k * 440;
     const y0 = p.y + KOPF_H + 12;
-    const fertig = gpuFortschritt(daten, gpuTakt);
+    const fertig = gpuFortschritt(daten);
     const spalten = a.n === 64 ? 16 : 16;
     const reihen = Math.ceil(a.n / spalten);
     const zb = 24;
@@ -1696,7 +1850,7 @@ function zeichneGpuRaster() {
       text(`fertig nach ${takteGesamt} Takten = ${zeitText(zeit)}`, x0, yInfo);
       textStyle(NORMAL);
     } else {
-      text(`Takt ${Math.min(gpuTakt, takteGesamt)} …`, x0, yInfo);
+      text(`${takteBisher(daten)} von ${takteGesamt} Takten geschafft …`, x0, yInfo);
     }
   });
 }
@@ -1727,14 +1881,19 @@ function zeichneGpuProtokoll() {
   textStyle(BOLD);
   textSize(17);
   textAlign(LEFT, TOP);
-  text(`Takt ${gpuTakt}`, x, y);
+  text(`Uhr: ${zeitText(gpuZeit())}`, x, y);
   textStyle(NORMAL);
+  textFont(SCHRIFT);
+  textSize(12.5);
+  fill(...FARBE.grau);
+  textAlign(RIGHT, TOP);
+  text(`CPU: Takt ${takteBisher(CPU_DATEN)} · GPU: Takt ${takteBisher(GPU_DATEN)}`, x + b, y + 3);
   y += 34;
   const zeilen = [
     ["", "CPU (Rathaus)", "GPU (Fabrik)"],
     ["Kerne", String(CPU_DATEN.kerne), String(GPU_DATEN.kerne)],
     ["Taktfrequenz", `${String(CPU_DATEN.ghz).replace(".", ",")} GHz`, `${String(GPU_DATEN.ghz).replace(".", ",")} GHz`],
-    ["pro Takt erledigt", a.abhaengig ? "1 (warten!)" : String(CPU_DATEN.kerne), a.abhaengig ? "1 (warten!)" : String(GPU_DATEN.kerne)],
+    ["pro Takt erledigt", a.abhaengig ? "1 (warten!)" : String(Math.min(a.n, CPU_DATEN.kerne)), a.abhaengig ? "1 (warten!)" : String(Math.min(a.n, GPU_DATEN.kerne))],
     ["Takte gesamt", String(tc), String(tg)],
     ["Zeit = Takte : Frequenz", zeitText(zc), zeitText(zg)],
   ];
@@ -1759,9 +1918,14 @@ function zeichneGpuProtokoll() {
   });
   y += zeilen.length * 30 + 12;
   const gewinner = zg < zc ? "GPU" : zg > zc ? "CPU" : "beide gleich";
-  const txt = a.abhaengig
-    ? `Hier gewinnt die ${gewinner}: Jeder Schritt braucht das Ergebnis des vorigen, also kann immer nur ein Kern arbeiten. Die vielen GPU-Arbeiter warten – und der einzelne CPU-Kern ist schneller getaktet.`
-    : `Hier gewinnt die ${gewinner}: Alle Teilaufgaben sind unabhängig, die 64 Arbeiter erledigen sie gleichzeitig. Deshalb rechnen Grafikkarten Bilder, Videos und KI-Modelle.`;
+  let txt;
+  if (a.abhaengig) {
+    txt = `Hier gewinnt die ${gewinner}: Jeder Schritt braucht das Ergebnis des vorigen, also kann immer nur ein Kern arbeiten. Die vielen GPU-Arbeiter warten – und der einzelne CPU-Kern ist schneller getaktet.`;
+  } else if (gewinner === "CPU") {
+    txt = `Hier gewinnt die CPU: Es gibt nur ${a.n} Teilaufgaben – ${GPU_DATEN.kerne - a.n} GPU-Arbeiter haben nichts zu tun. Beide brauchen gleich viele Takte, aber der CPU-Takt ist kürzer. In echt kommt noch dazu: Die Daten müssen erst über den Bus zur Grafikkarte und wieder zurück.`;
+  } else {
+    txt = `Hier gewinnt die ${gewinner}: Alle Teilaufgaben sind unabhängig, die ${GPU_DATEN.kerne} Arbeiter erledigen sie gleichzeitig. Deshalb rechnen Grafikkarten Bilder, Videos und KI-Modelle.`;
+  }
   absatz(txt, x, y, b, 13.5, FARBE.text);
 }
 

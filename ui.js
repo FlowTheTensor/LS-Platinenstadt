@@ -257,7 +257,7 @@ function aktualisiereUi() {
     klasse(ui.auto, "dunkel", laufAuto);
     sperre(ui.schritt, laufAuto);
     const ende = gpu ? gpuFertig() : sim && schrittIdx >= sim.schritte.length - 1;
-    beschrifte(ui.schritt, ende ? "↺ Nochmal" : gpu ? "1 Takt ▶ (→)" : "Schritt ▶ (→)");
+    beschrifte(ui.schritt, ende ? "↺ Nochmal" : gpu ? "0,25 ns ▶ (→)" : "Schritt ▶ (→)");
   }
 
   // Prüfung

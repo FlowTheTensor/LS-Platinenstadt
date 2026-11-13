@@ -230,13 +230,13 @@ function simuliere(beispiel, arch) {
         const w = z.eingaben.length ? z.eingaben.shift() : 0;
         z.akku = w;
         datenFahrt = { strasse: strasseD, ziel: "sensor", adresse: null, inhalt: w, art: "ea" };
-        text = `Ausführen: Ein Lieferwagen holt den Messwert ${w} vom Sensor am Stadttor. Akku = ${w}.`;
+        text = `Ausführen: Ein Lieferwagen holt den Messwert ${w} vom Sensor am Eingangstor. Akku = ${w}.`;
         break;
       }
       case "OUT":
         z.ausgabe.push(z.akku);
         datenFahrt = { strasse: strasseD, ziel: "monitor", adresse: null, inhalt: z.akku, art: "ea" };
-        text = `Ausführen: Der Akku-Wert ${z.akku} wird zum Monitor am Stadttor gebracht.`;
+        text = `Ausführen: Der Akku-Wert ${z.akku} wird zum Monitor am Ausgangstor gebracht.`;
         break;
       case "JMP":
         z.pc = b.a;
