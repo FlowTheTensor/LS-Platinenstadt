@@ -196,3 +196,25 @@ Am einfachsten in VS Code mit der Erweiterung **Live Server**: Rechtsklick auf `
 - Die Simulation rechnet ein Programm vorab komplett durch (höchstens 150 Schritte, danach Meldung „Endlosschleife“). Die Anzeige blättert nur durch diese Schritte.
 - Das Zeitmodell ist bewusst vereinfacht (1 Takt = 1 Busfahrt; bei Harvard läuft der Datenzugriff parallel zum Holen des nächsten Befehls). Echte Prozessoren brauchen je nach Befehl unterschiedlich viele Takte.
 - Fehler in `draw()` werden abgefangen und als Hinweis angezeigt, statt das Programm einzufrieren.
+
+## Lizenz
+
+[![CC BY 4.0](https://img.shields.io/badge/Lizenz-CC%20BY%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by/4.0/deed.de)
+
+**Platinenstadt · Der von-Neumann-Rechner** von **Christoph Rothaug, Jakob-Preh-Schule Bad Neustadt**, steht unter der Lizenz [Creative Commons Namensnennung 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/deed.de). Der vollständige Lizenztext steht in der Datei [`LICENSE`](LICENSE).
+
+Du darfst das Material (Quellcode, Texte, Aufgaben und Grafiken) kopieren, weitergeben und verändern, auch kommerziell. Dafür musst du
+
+- den Urheber nennen: *Christoph Rothaug, Jakob-Preh-Schule Bad Neustadt*,
+- auf die Lizenz verlinken: <https://creativecommons.org/licenses/by/4.0/deed.de>,
+- angeben, ob du etwas verändert hast.
+
+Vorschlag für die Namensnennung: *„Platinenstadt · Der von-Neumann-Rechner“ von Christoph Rothaug, Jakob-Preh-Schule Bad Neustadt, CC BY 4.0, https://github.com/FlowTheTensor/LS-Platinenstadt*
+
+**Ausgenommen** von dieser Lizenz sind:
+
+| Bestandteil | Rechte |
+|---|---|
+| `libraries/p5.min.js` | [p5.js](https://p5js.org), GNU LGPL 2.1 |
+| `assets/logo-jps.png` | Logo der Jakob-Preh-Schule – alle Rechte bei der Schule |
+| Schriften Quicksand, Inter, JetBrains Mono | über Google Fonts eingebunden, SIL Open Font License 1.1 |
