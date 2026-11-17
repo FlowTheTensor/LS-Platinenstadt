@@ -142,6 +142,7 @@ Beispiele für Prüfungsfragen:
 | „Automatisch“ oder **Leertaste** | ablaufen lassen / anhalten |
 | „Neustart“ oder **R** | Programm von vorn |
 | Tempo | langsam, mittel, schnell |
+| Mond / Sonne oben rechts | dunkles oder helles Farbschema; die Wahl wird im Browser gespeichert und gilt für alle Lernsituationen |
 
 ## Ideen für den Unterricht
 
@@ -166,6 +167,7 @@ Beispiele für Prüfungsfragen:
 | `ui.js` | Knöpfe, Auswahllisten, Eingabefelder |
 | `sketch.js` | Ablauf, Zeichnen: Stadt, Lieferwagen, Speicheransicht, Protokoll, GPU-Vergleich |
 | `assets/logo-jps.png` | Logo der Jakob-Preh-Schule |
+| `assets/logo-jps-hell.png` | Logo in Weiß für das dunkle Farbschema |
 | `libraries/p5.min.js` | p5.js (lokal, damit die Seite auch offline läuft) |
 
 ### Ein eigenes Beispielprogramm ergänzen
@@ -196,6 +198,7 @@ Am einfachsten in VS Code mit der Erweiterung **Live Server**: Rechtsklick auf `
 - Die Simulation rechnet ein Programm vorab komplett durch (höchstens 150 Schritte, danach Meldung „Endlosschleife“). Die Anzeige blättert nur durch diese Schritte.
 - Das Zeitmodell ist bewusst vereinfacht (1 Takt = 1 Busfahrt; bei Harvard läuft der Datenzugriff parallel zum Holen des nächsten Befehls). Echte Prozessoren brauchen je nach Befehl unterschiedlich viele Takte.
 - Fehler in `draw()` werden abgefangen und als Hinweis angezeigt, statt das Programm einzufrieren.
+- **Farbschema hell/dunkel:** Alle Farben stehen in zwei Paletten (`FARBE_HELL`, `FARBE_DUNKEL`); `FARBE` enthält die aktive Palette und wird beim Umschalten in place überschrieben. Die CSS-Variablen in `style.css` wechseln über die Klasse `dunkelmodus` am `<html>`-Element. Die Wahl steht im `localStorage` unter `jps-lernsituationen-farbschema` (ohne Speicher gilt die Systemeinstellung). Im dunklen Schema zeigt die Kopfzeile `assets/logo-jps-hell.png`.
 
 ## Lizenz
 
@@ -216,5 +219,5 @@ Vorschlag für die Namensnennung: *„Platinenstadt · Der von-Neumann-Rechner�
 | Bestandteil | Rechte |
 |---|---|
 | `libraries/p5.min.js` | [p5.js](https://p5js.org), GNU LGPL 2.1 |
-| `assets/logo-jps.png` | Logo der Jakob-Preh-Schule – alle Rechte bei der Schule |
+| `assets/logo-jps.png`, `assets/logo-jps-hell.png` | Logo der Jakob-Preh-Schule – alle Rechte bei der Schule |
 | Schriften Quicksand, Inter, JetBrains Mono | über Google Fonts eingebunden, SIL Open Font License 1.1 |

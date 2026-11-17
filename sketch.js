@@ -67,7 +67,7 @@ const P_STEUER = { x: 940, y: 480, w: 400, h: 404, titel: "" };
 const P_FREIGABE = { x: 1356, y: 480, w: 220, h: 404, titel: "Freigaben" };
 const KOPF_H = 34;
 
-const FARBE = {
+const FARBE_HELL = {
   papier: [251, 249, 245],
   flaeche: [255, 255, 255],
   flaeche2: [243, 238, 230],
@@ -85,7 +85,81 @@ const FARBE = {
   platineHell: [56, 122, 92],
   strasse: [70, 72, 76],
   kupfer: [200, 150, 70],
+  // Flächen und Schrift auf Flächen (für das dunkle Schema nötig)
+  textInvers: [255, 255, 255],
+  dunkelFlaeche: [29, 29, 28],
+  schatten: [29, 29, 28],
+  akzentFlaeche: [253, 240, 242],
+  akzentLinie: [240, 200, 208],
+  rotFlaeche: [251, 225, 230],
+  gruenFlaeche: [228, 241, 233],
+  neutral: [160, 155, 146], // inaktive Elemente
 };
+
+const FARBE_DUNKEL = {
+  papier: [22, 22, 21],
+  flaeche: [32, 31, 30],
+  flaeche2: [44, 42, 40],
+  linie: [62, 59, 55],
+  text: [236, 232, 224],
+  grau: [184, 178, 168],
+  blass: [140, 135, 126],
+  akzent: [236, 76, 98],
+  akzentHell: [255, 64, 92],
+  senf: [222, 166, 72],
+  gruen: [96, 186, 132],
+  blau: [104, 156, 222],
+  violett: [176, 136, 206],
+  platine: [24, 66, 48],
+  platineHell: [40, 92, 68],
+  strasse: [92, 94, 98],
+  kupfer: [214, 164, 84],
+  textInvers: [22, 22, 21],
+  dunkelFlaeche: [70, 67, 62],
+  schatten: [0, 0, 0],
+  akzentFlaeche: [52, 27, 32],
+  akzentLinie: [104, 44, 56],
+  rotFlaeche: [72, 32, 40],
+  gruenFlaeche: [30, 54, 41],
+  neutral: [120, 116, 108], // inaktive Elemente
+};
+
+const FARBE = {};
+
+// --- Farbschema hell/dunkel ---------------------------------------------------
+// FARBE enthält immer die aktive Palette. Beim Umschalten werden die Arrays
+// in place überschrieben, damit Verweise wie [FARBE.blau, …] gültig bleiben.
+// Die Wahl gilt für alle Lernsituationen (gleicher localStorage-Schlüssel).
+const FARBSCHEMA_SCHLUESSEL = "jps-lernsituationen-farbschema";
+let dunkelModus = false;
+
+function setzeFarbschema(dunkel) {
+  dunkelModus = !!dunkel;
+  const quelle = dunkelModus ? FARBE_DUNKEL : FARBE_HELL;
+  for (const k in quelle) {
+    if (FARBE[k]) {
+      FARBE[k].splice(0, FARBE[k].length, ...quelle[k]);
+    } else {
+      FARBE[k] = quelle[k].slice();
+    }
+  }
+  document.documentElement.classList.toggle("dunkelmodus", dunkelModus);
+}
+
+function gespeichertesFarbschema() {
+  try {
+    const v = localStorage.getItem(FARBSCHEMA_SCHLUESSEL);
+    if (v === "dunkel" || v === "hell") {
+      return v === "dunkel";
+    }
+  } catch (e) {
+    // kein Speicher verfügbar (z. B. privater Modus) – Systemeinstellung nehmen
+  }
+  return !!(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+}
+
+setzeFarbschema(gespeichertesFarbschema());
+
 
 // Farben je Rolle: als Befehl gelesen / als Zahl gelesen / geschrieben
 const ROLLE = { befehl: [44, 92, 150], daten: [184, 122, 28], schreiben: [200, 30, 58] };
@@ -553,7 +627,7 @@ function keyPressed() {
 // =============================================================================
 function panel(p) {
   noStroke();
-  fill(29, 29, 28, 10);
+  fill(...FARBE.schatten, 10);
   rect(p.x + 1, p.y + 3, p.w, p.h, 12);
   fill(...FARBE.flaeche);
   stroke(...FARBE.linie);
@@ -576,7 +650,7 @@ function panel(p) {
 }
 
 function hell(farbe, anteil) {
-  return [lerp(farbe[0], 255, anteil), lerp(farbe[1], 255, anteil), lerp(farbe[2], 255, anteil)];
+  return [lerp(farbe[0], FARBE.flaeche[0], anteil), lerp(farbe[1], FARBE.flaeche[1], anteil), lerp(farbe[2], FARBE.flaeche[2], anteil)];
 }
 
 function umbrechen(txt, maxBreite) {
@@ -655,9 +729,9 @@ function zeichneKopf() {
 
 function zeichneStufenLeiste() {
   noStroke();
-  fill(253, 240, 242);
+  fill(...FARBE.akzentFlaeche);
   rect(0, 56, W, LEISTE);
-  stroke(240, 200, 208);
+  stroke(...FARBE.akzentLinie);
   strokeWeight(1);
   line(0, 56 + LEISTE, W, 56 + LEISTE);
   noStroke();
@@ -797,7 +871,7 @@ function zeichneEvaKopf(fokus) {
   for (const [name, cx] of eintraege) {
     const w = textWidth(name) + 24;
     noStroke();
-    fill(...(fokus ? [255, 236, 170] : [255, 255, 255]));
+    fill(...(fokus ? hell(FARBE.senf, 0.72) : FARBE.flaeche));
     rect(cx - w / 2, y, w, 18, 9);
     fill(...FARBE.platine);
     textAlign(CENTER, CENTER);
@@ -805,7 +879,7 @@ function zeichneEvaKopf(fokus) {
     raender.push([cx - w / 2, cx + w / 2]);
   }
   textStyle(NORMAL);
-  stroke(255, 255, 255, 200);
+  stroke(...FARBE.flaeche, 255, 255, 200);
   strokeWeight(2);
   for (let i = 0; i < raender.length - 1; i++) {
     const x1 = raender[i][1] + 8;
@@ -858,7 +932,7 @@ function zeichneHauptstrasse(fokus) {
   textStyle(NORMAL);
   if (fokus) {
     noFill();
-    stroke(255, 220, 90);
+    stroke(...FARBE.flaeche, 220, 90);
     strokeWeight(3);
     rect(st.x - 2, st.y - 2, st.w + 4, st.h + 4, 4);
   }
@@ -882,7 +956,7 @@ function zeichneHarvardStrassen() {
   drawingContext.setLineDash([]);
   // Befehlsbus: eigene Straße zur Programm-Bibliothek, als Brücke über den Datenbus
   noStroke();
-  fill(0, 0, 0, 60);
+  fill(...FARBE.schatten, 60);
   rect(X_CPU - 16, ds.y - 4, 40, ds.h + 12);
   fill(...FARBE.strasse);
   rect(X_CPU - 20, unten, 40, PROG_GEB.y - unten);
@@ -891,7 +965,7 @@ function zeichneHarvardStrassen() {
   drawingContext.setLineDash([12, 8]);
   line(X_CPU, unten + 4, X_CPU, PROG_GEB.y - 2);
   drawingContext.setLineDash([]);
-  stroke(220, 220, 214);
+  stroke(...FARBE.linie);
   strokeWeight(2.5);
   line(X_CPU - 21, ds.y - 8, X_CPU - 21, ds.y + ds.h + 8);
   line(X_CPU + 21, ds.y - 8, X_CPU + 21, ds.y + ds.h + 8);
@@ -918,7 +992,7 @@ function zeichneRathaus(s, fokus) {
   noStroke();
   fill(...FARBE.akzent);
   triangle(r.x - 6, r.y + 18, r.x + r.w / 2, r.y - 24, r.x + r.w + 6, r.y + 18);
-  fill(250, 246, 236);
+  fill(...FARBE.flaeche);
   rect(r.x, r.y + 14, r.w, r.h - 14, 4);
   fill(255);
   textFont(TITEL);
@@ -947,7 +1021,7 @@ function zeichneRathaus(s, fokus) {
   person(RECHENWERK.x + 34, RECHENWERK.y + 88, [184, 122, 28], false, rechenAktiv);
   tafel(RECHENWERK.x + 72, RECHENWERK.y + 28, 110, "Akku", s ? String(s.akku) : "0", FARBE.gruen, fokus === "register", s ? bin8(s.akku) : "");
   // ALU-Trichter
-  fill(...(rechenAktiv ? hell(FARBE.gruen, 0.4) : [210, 206, 196]));
+  fill(...(rechenAktiv ? hell(FARBE.gruen, 0.4) : FARBE.neutral));
   stroke(...FARBE.grau);
   strokeWeight(1);
   quad(RECHENWERK.x + 196, RECHENWERK.y + 36, RECHENWERK.x + 256, RECHENWERK.y + 36, RECHENWERK.x + 238, RECHENWERK.y + 94, RECHENWERK.x + 214, RECHENWERK.y + 94);
@@ -961,14 +1035,14 @@ function zeichneRathaus(s, fokus) {
   textStyle(NORMAL);
   if (fokus === "rathaus") {
     noFill();
-    stroke(255, 220, 90);
+    stroke(...FARBE.flaeche, 220, 90);
     strokeWeight(4);
     rect(r.x - 8, r.y - 28, r.w + 16, r.h + 34, 8);
   }
 }
 
 function raum(r, name, aktiv, fokus) {
-  fill(...(aktiv ? [255, 240, 200] : [255, 255, 255]));
+  fill(...(aktiv ? hell(FARBE.senf, 0.8) : FARBE.flaeche));
   stroke(...(fokus ? [230, 180, 40] : FARBE.linie));
   strokeWeight(fokus ? 3 : 1);
   rect(r.x, r.y, r.w, r.h, 6);
@@ -1021,7 +1095,7 @@ function person(x, y, farbe, kette, aktiv) {
 
 function tafel(x, y, w, titel, wert, farbe, fokus, unten) {
   noStroke();
-  fill(...(fokus ? [255, 236, 170] : FARBE.flaeche2));
+  fill(...(fokus ? hell(FARBE.senf, 0.72) : FARBE.flaeche2));
   stroke(...(fokus ? [230, 180, 40] : hell(farbe, 0.5)));
   strokeWeight(fokus ? 2.5 : 1.5);
   rect(x, y, w, 76, 5);
@@ -1060,7 +1134,7 @@ function zeichneSpeicherGebaeude(g, name, untertitel, s, art, farbe, reihen, fok
   textFont(SCHRIFT);
   textSize(9.5);
   text(untertitel, g.x + g.w / 2, g.y + 23);
-  fill(240, 236, 228);
+  fill(...FARBE.flaeche2);
   rect(g.x, g.y + 30, g.w, g.h - 30, 0, 0, 6, 6);
   const spalten = 16 / reihen;
   const fw = (g.w - 16) / spalten;
@@ -1104,7 +1178,7 @@ function zeichneSpeicherGebaeude(g, name, untertitel, s, art, farbe, reihen, fok
   }
   if (fokus) {
     noFill();
-    stroke(255, 220, 90);
+    stroke(...FARBE.flaeche, 220, 90);
     strokeWeight(4);
     rect(g.x - 4, g.y - 4, g.w + 8, g.h + 8, 8);
   }
@@ -1175,7 +1249,7 @@ function zeichneTor(t, art, s, fokus) {
     text("nach außen", cx, t.y + 148);
   }
   // Pfeil zur bzw. von der Außenwelt
-  stroke(255, 255, 255, 210);
+  stroke(...FARBE.flaeche, 255, 255, 210);
   strokeWeight(2.5);
   const y = BUS_Y.daten;
   const x1 = art === "ein" ? P_STADT.x + 14 : t.x + t.w + 2;
@@ -1186,7 +1260,7 @@ function zeichneTor(t, art, s, fokus) {
   noStroke();
   if (fokus) {
     noFill();
-    stroke(255, 220, 90);
+    stroke(...FARBE.flaeche, 220, 90);
     strokeWeight(4);
     rect(t.x - 4, t.y - 14, t.w + 8, t.h + 18, 8);
   }
@@ -1287,7 +1361,7 @@ function zeichneLieferwagen(f, harvard) {
   textSize(11);
   const b = textWidth(schild) + 12;
   noStroke();
-  fill(255, 255, 255, 240);
+  fill(...FARBE.flaeche, 255, 255, 240);
   stroke(...farbe);
   strokeWeight(1.5);
   rect(x - b / 2, y - 40, b, 18, 4);
@@ -1315,7 +1389,7 @@ function zeichneFokusRahmen(id) {
   }
   const huepf = Math.sin(millis() / 200) * 4;
   noStroke();
-  fill(255, 210, 60);
+  fill(...FARBE.flaeche, 210, 60);
   for (const pt of pos) {
     triangle(pt[0] - 9, pt[1] - 18 + huepf, pt[0] + 9, pt[1] - 18 + huepf, pt[0], pt[1] - 4 + huepf);
   }
@@ -1569,11 +1643,11 @@ function zeichnePruefungsInfo(x, y, b) {
     const hx = x + i * abstand + 10;
     const an = i < serie;
     noStroke();
-    fill(...(an ? FARBE.akzent : [200, 196, 188]));
+    fill(...(an ? FARBE.akzent : FARBE.neutral));
     triangle(hx - 4, y + 16, hx + 26, y, hx + 56, y + 16);
-    fill(...(an ? [250, 246, 236] : [230, 226, 218]));
+    fill(...(an ? [250, 246, 236] : FARBE.flaeche2));
     rect(hx, y + 16, 52, 36, 2);
-    fill(...(an ? [255, 214, 90] : [180, 176, 168]));
+    fill(...(an ? [255, 214, 90] : FARBE.neutral));
     rect(hx + 8, y + 24, 14, 12, 2);
     rect(hx + 30, y + 24, 14, 12, 2);
   }
@@ -1723,7 +1797,7 @@ function zeichneGpuStadt() {
   const cy = p.y + 90;
   fill(...FARBE.akzent);
   triangle(cx - 6, cy + 18, cx + 165, cy - 26, cx + 336, cy + 18);
-  fill(250, 246, 236);
+  fill(...FARBE.flaeche);
   rect(cx, cy + 14, 330, 390, 4);
   fill(255);
   textFont(TITEL);
@@ -1740,7 +1814,7 @@ function zeichneGpuStadt() {
     const kx = cx + 30 + (i % 2) * 150;
     const ky = cy + 70 + Math.floor(i / 2) * 160;
     const arbeitet = kernArbeitet(CPU_DATEN, i);
-    fill(...(arbeitet ? [255, 240, 200] : [255, 255, 255]));
+    fill(...(arbeitet ? hell(FARBE.senf, 0.8) : FARBE.flaeche));
     stroke(...FARBE.linie);
     strokeWeight(1);
     rect(kx, ky, 130, 140, 6);
@@ -1790,7 +1864,7 @@ function zeichneGpuStadt() {
     fill(240, 210, 180);
     circle(wx, wy - 8, 12);
     if (arbeitet) {
-      fill(255, 214, 90);
+      fill(...FARBE.flaeche, 214, 90);
       rect(wx + 9, wy + 2, 8, 8, 1);
     }
   }
@@ -1828,10 +1902,10 @@ function zeichneGpuRaster() {
     for (let i = 0; i < a.n; i++) {
       const cx = x0 + (i % spalten) * zb;
       const cy = y0 + 26 + Math.floor(i / spalten) * zb;
-      fill(...(i < fertig ? farbe : [232, 228, 220]));
+      fill(...(i < fertig ? farbe : FARBE.flaeche2));
       rect(cx, cy, zb - 3, zb - 3, 3);
       if (a.abhaengig && i > 0 && i < a.n) {
-        stroke(...(i < fertig ? farbe : [200, 196, 188]));
+        stroke(...(i < fertig ? farbe : FARBE.neutral));
         strokeWeight(1.5);
         line(cx - 3, cy + (zb - 3) / 2, cx, cy + (zb - 3) / 2);
         noStroke();
@@ -1997,16 +2071,16 @@ function zeichneStempel() {
   rotate(-0.18);
   scale(1 + fall * 1.5);
   noStroke();
-  fill(255, 255, 255, alpha * 0.85);
+  fill(...FARBE.flaeche, 255, 255, alpha * 0.85);
   circle(0, 0, 250);
   noFill();
-  stroke(200, 30, 58, alpha);
+  stroke(...FARBE.akzent, alpha);
   strokeWeight(7);
   circle(0, 0, 250);
   strokeWeight(2.5);
   circle(0, 0, 222);
   noStroke();
-  fill(200, 30, 58, alpha);
+  fill(...FARBE.akzent, alpha);
   textFont(TITEL);
   textStyle(BOLD);
   textAlign(CENTER, CENTER);
@@ -2025,7 +2099,7 @@ function zeichneFehlerMeldung() {
     return;
   }
   noStroke();
-  fill(200, 30, 58, 235);
+  fill(...FARBE.akzent, 235);
   rect(24, 846, 900, 34, 8);
   fill(255);
   textFont(SCHRIFT);
